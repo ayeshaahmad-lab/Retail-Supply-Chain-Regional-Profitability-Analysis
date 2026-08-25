@@ -65,3 +65,53 @@ quietly gives you fewer rows than you expect. If unnoticed, it could skew
 every downstream total (sales, profit, etc.) without any obvious sign 
 something was wrong. Always verify row counts immediately after importing 
 data, before doing any analysis.
+
+### Issue 2: Duplicate rows
+
+**What I checked:**
+1. Whether `Row ID` (the assumed primary key) contained any duplicate values.
+2. Whether any full rows were duplicated — i.e. the same order/customer/
+   product/sales data repeated under a different `Row ID`.
+
+**Query 1 — Row ID duplicates:**
+```sql
+SELECT `Row ID`, COUNT(*)
+FROM sales
+GROUP BY `Row ID`
+HAVING COUNT(*) > 1;
+```
+Result: no duplicate `Row ID` values found — confirming the primary key is clean.
+
+**Query 2 — Full row duplicates:**
+Since a duplicate could still exist under a different `Row ID`, I used a window 
+function to check for rows where every column (excluding `Row ID`) matched 
+another row exactly:
+
+```sql
+SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY `Order ID`, `Order Date`, `Ship Date`, `Ship Mode`, 
+    `Customer ID`, `Customer Name`, `Segment`, `Country`, `City`, `State`, 
+    `Postal Code`, `Region`, `Retail Sales People`, `Product ID`, `Category`, 
+    `Sub-Category`, `Product Name`, `Returned`, `Sales`, `Quantity`, 
+    `Discount`, `Profit`
+) AS row_num
+FROM sales;
+```
+
+Rows where `row_num > 1` indicate a true duplicate.
+
+**Result:** Found **1 duplicate row**.
+
+**How I handled it:**
+Rather than deleting directly from the original `sales` table, I created a 
+second table, `sales_clean`, containing a full copy of the data plus the 
+`row_num` result above. I then removed the duplicate row from `sales_clean` 
+only. This keeps the original `sales` table as an untouched, raw backup — so 
+if I ever need to verify a cleaning decision or start over, the original 
+import is still intact. From this point onward, all further cleaning and 
+analysis in this project is done on `sales_clean`, not `sales`.
+
+**Why this matters:** Even a single duplicate row can silently inflate sales, 
+quantity, or profit totals in later aggregate analysis. Keeping a raw, 
+unmodified copy of the original data alongside the cleaned version is a 
+standard practice — it makes every cleaning decision traceable and reversible.
