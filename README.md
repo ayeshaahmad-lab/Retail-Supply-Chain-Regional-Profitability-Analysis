@@ -43,8 +43,21 @@ import. This is a known source of silent row loss because:
 
 **Fix:**
 Re-exported the source file from Excel specifically as "CSV UTF-8 (Comma 
-delimited)" and re-imported into MySQL. [Update this line once you've 
-confirmed the new row count — see note below.]
+delimited)" and re-imported into MySQL.
+After multiple failed import attempts via MySQL Workbench's Table Data Import 
+Wizard (which silently dropped rows in different ways — first 300 missing 
+rows scattered throughout the file, then as few as 160 rows imported after 
+re-exporting as CSV UTF-8), I abandoned the import wizard entirely. Instead, 
+I generated a SQL script containing explicit `CREATE TABLE` and `INSERT` 
+statements built directly from the validated CSV data, and ran it as a 
+script in Workbench. This guaranteed all 9,994 rows loaded correctly, since 
+the data no longer depended on any tool's CSV parsing behavior.
+
+Verified via:
+```sql
+SELECT COUNT(*) FROM sales;
+```
+Result: 9994 — matching the raw file's row count exactly.
 
 **Why this matters:**
 This kind of silent row loss during import doesn't throw an error — it just 
